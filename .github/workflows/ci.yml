@@ -1,4 +1,4 @@
-name: SESO CI
+﻿name: SESO CI
 
 on:
   push:
@@ -16,9 +16,9 @@ jobs:
     env:
       PYTHONPATH: scripts
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
 
@@ -39,3 +39,4 @@ jobs:
       - name: Unit tests (platform-independent subset)
         run: |
           python -m pytest tests/test_sources.py tests/test_status_schema.py tests/test_baostock_client.py -q
+
