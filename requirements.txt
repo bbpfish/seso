@@ -1,4 +1,4 @@
-# SESO 采集模块依赖清单（公共版）
+# SESO 采集模块依赖清单
 # 覆盖范围：scripts/ 下全部采集脚本（状态快照链 + K线四源 + 指数采集 + 交易日历）
 # 版本策略：下限约束（>=），避免过度锁定；建议在虚拟环境中安装：
 #   python -m venv .venv && source .venv/bin/activate
