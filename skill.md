@@ -29,14 +29,15 @@ AIGC:
 
 | 目标 | 命令 |
 | --- | --- |
-| 每日增量采集（推荐） | `python run_daily_collect.py --incremental` |
-| 全量重建 | `python run_daily_collect.py` |
-| K 线四源全量 | `python run_kline_multi.py --mode full` |
-| K 线两源增量 | `python run_kline_multi.py --mode incremental` |
-| 指数四源全量 | `python run_index_collect.py --mode full` |
-| 指数当日增量 | `python run_index_collect.py --mode incremental` |
-| 状态快照增量 | `python collect_stock_status.py --incremental` |
-| 状态快照全量 | `python collect_stock_status.py` |
+| 每日增量采集（推荐） | `python scripts/run_daily_collect.py --incremental` |
+| 每日增量试点自检 | `python scripts/run_daily_collect.py --incremental --kline-limit 20` |
+| 全量重建 | `python scripts/run_daily_collect.py` |
+| K 线四源全量 | `python scripts/run_kline_multi.py --mode full` |
+| K 线两源增量 | `python scripts/run_kline_multi.py --mode incremental` |
+| 指数四源全量 | `python scripts/run_index_collect.py --mode full` |
+| 指数当日增量 | `python scripts/run_index_collect.py --mode incremental` |
+| 状态快照增量 | `python scripts/collect_stock_status.py --incremental` |
+| 状态快照全量 | `python scripts/collect_stock_status.py` |
 
 > 运行入口可能在仓库根目录（`run_*.py`）或 `scripts/` 子目录，Agent 执行前先确认实际路径。
 
