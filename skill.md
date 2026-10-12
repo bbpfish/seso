@@ -28,7 +28,7 @@
 | 状态快照增量 | `python scripts/collect_stock_status.py --incremental` |
 | 状态快照全量 | `python scripts/collect_stock_status.py` |
 
-> 运行入口可能在仓库根目录（`run_*.py`）或 `scripts/` 子目录，Agent 执行前先确认实际路径。
+> 运行入口可能在仓库根目录（`run_*.py`）或 `scripts/` 子目录，执行前先确认实际路径。
 
 ## 数据契约
 
