@@ -31,7 +31,8 @@ import subprocess
 import sys
 import time
 
-from kline_env import KLINE_VERSION, LOG_DIR, SCRIPTS_DIR  # noqa: E402
+from kline_env import (CACHE_DIR, DATA_DIR, KLINE_VERSION, LOG_DIR,  # noqa: E402
+                       SCRIPTS_DIR)
 
 # load THS credentials (thsdk reads THS_USERNAME/THS_PASSWORD; originally injected by run_kline_ths.sh, now self-contained)
 ENV_FILE = SCRIPTS_DIR / "ths_credentials.env"
@@ -99,12 +100,13 @@ def main():
                     help="透传给 run_kline_multi 的 --use-list")
     args = ap.parse_args()
 
+    now = datetime.datetime.now()
     logger = setup_logger()
     logger.info("=== daily collect start version=%s mode=%s ===",
                 KLINE_VERSION, "incremental" if args.incremental else "full")
 
     # ---- 交易日统一判断（入口级）: 非交易日直接跳过整个采集 ----
-    today = datetime.datetime.now().date().isoformat()
+    today = trade_calendar.cn_today().isoformat()
     if not trade_calendar.is_trading_day(today):
         logger.info("今天 %s 非交易日, 直接跳过今日采集（快照+K线均不执行）", today)
         return 0

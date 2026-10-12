@@ -13,15 +13,17 @@
 协议要点（2026-09 逆向）:
 - 服务器认 0c02/0c03 即可用普通命令；批量接口需 0c01 身份（放弃，用单只循环+多IP并发）
 - 老 pytdx 命令（bars/quotes/finance）只改版本标识 18 7b 00 01 即可用
+
+marker: SESO_TDXDATA_PATCH_20261012（ensure_tdxdata_patch 自愈识别标记）
 """
-import socket, time
+import os, socket, time
 
 from .commands.auth import build_auth
 from .commands.bars import build_bars_req, parse_bars_response
 from .commands.finance import build_finance_req, parse_finance
 from .commands.quotes import build_quotes_req, parse_quotes
 
-DEFAULT_HOST = '101.35.121.35'
+DEFAULT_HOST = os.environ.get("TDX_HOST", "101.35.121.35")
 PORT = 7709
 C02 = bytes.fromhex("0c0218940001030003000d0001")
 
@@ -87,6 +89,7 @@ class TdxClient:
 
     # ---- 分时快照 ----
     def snap(self, code: str, market: int = None):
+        import struct
         m = market if market is not None else market_of(code)
         req = SNAP_PREFIX + bytes([m, 0]) + code.encode() + SNAP_SUFFIX
         r = self._req(req)

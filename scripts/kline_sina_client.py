@@ -13,6 +13,7 @@
 """
 import logging
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -34,7 +35,7 @@ from stock_code_utils import get_sina_symbol  # noqa: E402
 #  sh000852 中证1000），非深市股票——update_index 以 "000 开头 -> sh" 构造 symbol
 # 恰好正确；深市指数 399xxx 走 sz 前缀亦正确。注意 000 开头同时是深市股票段
 # （sz000001 平安银行），指数/股票区分完全依赖前缀，调用方须保证传入纯指数代码。
-INDEX_CODES = {'000001', '000016', '000300', '000905', '000852'}
+# 发号清单已收敛至 kline_env.INDEX_CODES（本文件不再重复定义）。
 
 # ---- 新浪源稳定化参数（2026-09-08 修复：防 akshare 无超时导致整任务卡死）----
 REQ_TIMEOUT = 5         # 单次 HTTP 请求超时（秒）：正常请求1.5s，5s阈值安全兜底
@@ -77,6 +78,65 @@ def _patch_requests_timeout():
         logger.info("Patched requests default timeout -> %ss", REQ_TIMEOUT)
     except Exception as e:
         logger.warning("requests timeout patch failed: %s", str(e)[:80])
+
+
+# ---- 指数采集 akshare 共享 Session 连接池（v1.3.1，P1 优化）----
+_INDEX_AK_SESSION = None
+_INDEX_AK_PATCHED = False
+_INDEX_AK_PATCH_LOCK = threading.Lock()
+
+
+class _IndexRequestsProxy:
+    """akshare 指数模块 requests 引用的轻量代理：get/post 转发共享 Session。
+
+    仅替换 akshare.index.index_stock_zh 命名空间内的 requests 名（该模块头部
+    import requests，函数内直接 requests.get），不触碰全局 requests 模块对象
+    （run_kline_multi 股票采集线程、其他 akshare 模块不受影响）。
+    """
+
+    def __init__(self, session):
+        self._session = session
+
+    def get(self, url, *args, **kwargs):
+        kwargs.setdefault("timeout", REQ_TIMEOUT)
+        return self._session.get(url, *args, **kwargs)
+
+    def post(self, url, *args, **kwargs):
+        kwargs.setdefault("timeout", REQ_TIMEOUT)
+        return self._session.post(url, *args, **kwargs)
+
+
+def ensure_index_session_pool():
+    """激活 akshare 指数请求的共享 Session 连接池（幂等，跨客户端只 patch 一次）。
+
+    背景：akshare stock_zh_index_daily / stock_zh_index_daily_tx（同文件
+    index_stock_zh.py）内部直接 requests.get，指数 full 模式 5 只 × 单源逐只新建
+    TCP 连接（sina/tx 合计 10 次握手）。此处把 akshare 指数模块命名空间内的
+    requests 名替换为代理（转发共享 Session，urllib3 连接池 keep-alive），进程内
+    一次握手多请求复用；不碰全局 requests（run_kline_multi 股票采集并发线程不受影响）。
+    幂等：以 _INDEX_AK_PATCHED + akshare 模块侧 _marvis_index_session_patched
+    双重标志防重复包装（与 _patch_requests_timeout 同思路）。
+    """
+    global _INDEX_AK_SESSION, _INDEX_AK_PATCHED
+    if _INDEX_AK_PATCHED:
+        return
+    with _INDEX_AK_PATCH_LOCK:
+        if _INDEX_AK_PATCHED:
+            return
+        try:
+            import requests as _req
+            from akshare.index import index_stock_zh as _idx_mod
+            if getattr(_idx_mod, "_marvis_index_session_patched", False):
+                _INDEX_AK_PATCHED = True
+                return
+            _INDEX_AK_SESSION = _req.Session()
+            _idx_mod.requests = _IndexRequestsProxy(_INDEX_AK_SESSION)
+            _idx_mod._marvis_orig_requests = _req  # 原 requests 模块引用，保留审计
+            _idx_mod._marvis_index_session_patched = True
+            _INDEX_AK_PATCHED = True
+            logger.info("akshare 指数请求已切换到共享 Session 连接池（index_stock_zh.requests -> Session 代理）")
+        except Exception as e:
+            logger.warning("akshare 指数会话池激活失败（继续逐请求短连接）：%s", str(e)[:80])
 
 
 def fetch_sina_daily(code, start_date='', end_date='', adjust=''):
@@ -199,6 +259,7 @@ def fetch_index_daily(code: str, start_date: str = "", end_date: str = ""):
     """
     import akshare as ak
     from stock_code_utils import get_index_symbol
+    ensure_index_session_pool()  # v1.3.1：共享 Session 连接池（幂等）
 
     try:
         symbol = get_index_symbol(code)
@@ -210,6 +271,7 @@ def fetch_index_daily(code: str, start_date: str = "", end_date: str = ""):
             logger.warning("Index %s: no data", code)
             return None
         df = df.rename(columns={})
+        _cols = {c: c for c in ['date', 'open', 'high', 'low', 'close', 'volume']}
         for _c in ['date', 'open', 'high', 'low', 'close', 'volume']:
             if _c not in df.columns:
                 logger.warning("Index %s: 新浪返回缺列 %s，已补 NaN", code, _c)
@@ -237,42 +299,62 @@ def fetch_index_daily(code: str, start_date: str = "", end_date: str = ""):
         return None
 
 
-def update_index(code):
-    """新浪源指数落盘（独立流程）：拉取指数日K，增量合并写 INDEX_DIR/{code}.parquet。
-
-    落盘列为统一指数契约 INDEX_COLS（含 amount 列，全 NaN），兼容下游 date/close 读取。
-    """
-    from stock_code_utils import get_index_symbol
-
+def _merge_index_write(fp, code, df, overwrite):
+    """指数落盘统一合并（对齐 K 线 _merge_write）：overwrite=True 直接替换整文件；
+    False 列级合并（新数据非 NaN 优先，可修复中间缺列，非仅追加新日期）。"""
     INDEX_DIR.mkdir(parents=True, exist_ok=True)
-    fp = INDEX_DIR / f"{code}.parquet"
-    existing_end = None
-    if fp.exists():
-        try:
-            df = pd.read_parquet(fp, columns=['date'])
-            existing_end = pd.to_datetime(df['date']).max()
-        except Exception:
-            pass
-    try:
-        if get_index_symbol(code) is None:
-            logger.warning("Index %s: 非指数代码段（000/399），跳过落盘", code)
-            return False
-        df = fetch_index_daily(code)
-        if df is None or df.empty:
-            logger.warning("Index %s: no data", code)
-            return False
-        if existing_end:
-            new_part = df[df['date'] > existing_end]
-            if new_part.empty:
-                return True
-            old_df = pd.read_parquet(fp)
-            df = pd.concat([old_df, new_part], ignore_index=True)
-            df.drop_duplicates(subset=['date'], keep='last', inplace=True)
-            df.sort_values('date', inplace=True)
+    if overwrite or not fp.exists():
         _tmp = fp.with_suffix(".parquet.tmp")
         df.to_parquet(_tmp, index=False)
         atomic_replace(_tmp, fp)
         return True
+    try:
+        old = pd.read_parquet(fp)
+        if old.empty or "date" not in old.columns:
+            raise ValueError("bad existing")
+    except Exception as e:
+        logger.warning("Index %s 存量读取失败(%s)，直接替换", code, str(e)[:80])
+        _tmp = fp.with_suffix(".parquet.tmp")
+        df.to_parquet(_tmp, index=False)
+        atomic_replace(_tmp, fp)
+        return True
+    new = df.copy()
+    new["date"] = pd.to_datetime(new["date"])
+    old["date"] = pd.to_datetime(old["date"])
+    merged = (new.set_index("date").combine_first(old.set_index("date"))
+              .reset_index().drop_duplicates("date").sort_values("date"))
+    for _c in INDEX_COLS[1:]:
+        if _c in merged.columns:
+            merged[_c] = pd.to_numeric(merged[_c], errors="coerce")
+    _tmp = fp.with_suffix(".parquet.tmp")
+    merged.to_parquet(_tmp, index=False)
+    atomic_replace(_tmp, fp)
+    return True
+
+
+def update_index(code, count: int = 0, start_date: str = "", end_date: str = "", overwrite=False):
+    """新浪源指数落盘（独立流程）：拉取指数日K，落盘 INDEX_DIR/{code}.parquet。
+
+    落盘列为统一指数契约 INDEX_COLS（含 amount 列，全 NaN），兼容下游 date/close 读取。
+    count>0 时仅取最近 count 根（end_date 过滤后尾部，对齐 K 线 count 语义；
+    增量场景编排层恒传 1 只拉当日）；overwrite=True 直接替换，False 列级合并。
+    """
+    from stock_code_utils import get_index_symbol
+
+    fp = INDEX_DIR / f"{code}.parquet"
+    try:
+        if get_index_symbol(code) is None:
+            logger.warning("Index %s: 非指数代码段（000/399），跳过落盘", code)
+            return False
+        df = fetch_index_daily(code, start_date=start_date, end_date=end_date)
+        if df is None or df.empty:
+            logger.warning("Index %s: no data", code)
+            return False
+        if count > 0:
+            df = df.tail(count).copy()
+        if df.empty:
+            return False
+        return _merge_index_write(fp, code, df, overwrite)
     except Exception as e:
         logger.error("Index %s failed: %s", code, str(e)[:60])
         return False

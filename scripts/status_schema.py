@@ -13,6 +13,7 @@
 
 """
 import logging
+import os
 import re
 from datetime import datetime
 from pathlib import Path
@@ -40,7 +41,7 @@ ASZ_PAT = re.compile(r"^sz\.(00|30)\d{4}$")
 NEW_DAYS = 375
 # 写盘闸门：最新截面 normal 股数低于该值即中止（3000 ≈ 当前 A 股在市数量的
 # 安全下限；双源 fail-open 将全 universe 误标时远低于此值）
-MIN_NORMAL_FOR_WRITE = 3000
+MIN_NORMAL_FOR_WRITE = int(os.environ.get("SESO_MIN_NORMAL_FOR_WRITE", "3000"))
 
 COLS = ["date", "code", "name", "status", "st_level", "is_new", "ipo_date"]
 

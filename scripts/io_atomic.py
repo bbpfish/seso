@@ -2,8 +2,9 @@
 """io_atomic.py — 采集模块统一的原子落盘工具（零三方依赖，2026-09-18 收口）
 
 约定：先写同目录 tmp → fsync → os.replace 原子替换。
-生产 bind 挂载（work/data 目录）上 os.replace 偶发 ENOTSUP/EBUSY，
-此时重试一次后退化为 copyfile 覆盖兜底：原子性弱化但不丢数据、不中断任务。
+生产 bind 挂载（工作目录/数据目录）上 os.replace 偶发
+ENOTSUP/EBUSY（见 seso_engine._atomic_write_text 历史故障），此时重试一次后
+退化为 copyfile 覆盖兜底：原子性弱化但不丢数据、不中断任务。
 
 规则：除 seso_engine.py 自持锁/持 .bak 特殊语义的写入外，采集模块内禁止再裸调
 os.replace，统一走本模块。

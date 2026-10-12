@@ -1,3 +1,14 @@
+---
+AIGC:
+    Label: "1"
+    ContentProducer: 001191440300708461136T1XGW3
+    ProduceID: 041680e517c313fbd9efd67f2de7c4dd_e7f5b786c5e511f1a08152540064ee0f
+    ReservedCode1: Oqfxe190/8bpA6LDEvEhIfipu+lS9Z0Y0YGxgzJXOqHCgc8fq4IpMiK7z7hBO3/S6rnUB3KIzWVuwOa7/8K6pvPVkhIX71ecV4uuCHt+Z+BhwIaW0f7hNyInSLI0ewpnjnOxnhKG1oESyBvXHr3klo6I3w1cmIEJurvJLrhtoWX8eMsW/6EiVS1Kdlo=
+    ContentPropagator: 001191440300708461136T1XGW3
+    PropagateID: 041680e517c313fbd9efd67f2de7c4dd_e7f5b786c5e511f1a08152540064ee0f
+    ReservedCode2: Oqfxe190/8bpA6LDEvEhIfipu+lS9Z0Y0YGxgzJXOqHCgc8fq4IpMiK7z7hBO3/S6rnUB3KIzWVuwOa7/8K6pvPVkhIX71ecV4uuCHt+Z+BhwIaW0f7hNyInSLI0ewpnjnOxnhKG1oESyBvXHr3klo6I3w1cmIEJurvJLrhtoWX8eMsW/6EiVS1Kdlo=
+---
+
 # Skill: SESO 数据采集（A 股行情采集）
 
 ## 适用场景
@@ -53,3 +64,4 @@
 - 本仓库为**公共仓库**，禁止提交任何凭据、内网地址、本机绝对路径（Windows 路径、VPS IP 等）。
 - 提交前自查：`grep` 敏感关键字（`192.168`、`D:\`、token、密码），跑 `pyflakes` 静态检查，确保无新增告警。
 - 修改代码后运行 `tests/` 下平台无关单测子集，避免破坏 CI。
+*（内容由AI生成，仅供参考）*

@@ -22,7 +22,7 @@ trade_calendar.py — SESO 统一交易日历模块
   2) 超出覆盖范围或日历不可用时返回 None / [] / 0（不设近似后备，调用方自行处理）。
 
 时区约束：交易日历口径的"今天"统一取 Asia/Shanghai（cn_today），防 UTC
-容器（默认 TZ=UTC）下新鲜度检查与采集端末日在北京时间 0:00~8:00
+容器（jovyan 默认 TZ=UTC）下新鲜度检查与采集端末日在北京时间 0:00~8:00
 之间偏移一天；zoneinfo/tzdata 不可用时退回本地时区（部署时建议设
 TZ=Asia/Shanghai 双保险）。
 
@@ -81,7 +81,7 @@ def _normalize(d) -> date:
 def cn_today() -> date:
     """Asia/Shanghai 口径的"今天"（交易日历/新鲜度检查/采集端统一使用）。
 
-    防 UTC 容器（默认 TZ=UTC）下 date.today() 在北京时间 0:00~8:00
+    防 UTC 容器（jovyan 默认 TZ=UTC）下 date.today() 在北京时间 0:00~8:00
     偏移一天；zoneinfo/tzdata 不可用时退回本地时区（部署时应设 TZ=Asia/Shanghai）。
     """
     if _CN_TZ is not None:

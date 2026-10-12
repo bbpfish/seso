@@ -4,11 +4,11 @@
 背景：tdxdata 0.1.1 解析指数行情漏每行尾随 4 字节致全量错位，补丁修改
   commands/bars.py 的 parse_bars_response 增加 is_index 参数、client.py 的
   bars() 透传 is_index。该补丁游离于 SESO git 仓库之外（tdxdata 为独立 pip 包，
-  部署环境重建后会回退到镜像原始版本）。
+  容器内位于 site-packages/tdxdata/），容器删除重建后会回退到镜像原始版本。
 
-本脚本将补丁文件随 git 同步（仓库 scripts/tdxdata_patch/），采集入口启动时
-  调用 ensure() 检查环境内安装：缺 is_index 补丁 -> 备份 .bak_<YYYYmmdd>
-  后覆盖；已补丁 -> 跳过（幂等）。
+本脚本将补丁文件随 git 同步（仓库 scripts 挂载目录下 tdxdata_patch/），采集入口
+启动时调用 ensure() 检查容器内安装：
+  缺 is_index 补丁 -> 备份 .bak_<YYYYmmdd> 后覆盖；已补丁 -> 跳过（幂等）。
 """
 import datetime
 import os
@@ -17,7 +17,7 @@ import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _PATCH_DIR = os.path.join(_HERE, "tdxdata_patch")
-_PATCH_MARK = "is_index"
+_PATCH_MARK = "SESO_TDXDATA_PATCH_20261012"
 
 # 若容器内 tdxdata 可 import 则取真实安装路径；否则回退已知部署路径
 def _locate_tdxdata_root():

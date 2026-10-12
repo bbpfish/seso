@@ -16,7 +16,17 @@ from pathlib import Path
 #         统一 INDEX_COLS 7列契约，落盘 data/index；THS 成交额列名"总金额"修正）
 # v1.3.0: 新增指数采集编排 work（run_index_collect.py）：full=四源全量发号，
 #         incremental=THS+TDX 两源当日增量；增量调度已集成 run_kline_multi 每日增量路径
-KLINE_VERSION = "1.3.0"
+# v1.3.1: 指数采集小问题修复（对齐 K 线成熟做法）：
+#         ① incremental 恒 count=1 只拉当日；full 四分支查漏（skip/repair/gap/full_fetch）；
+#            --overwrite 复写；四客户端 update_index 增加 overwrite 可选参并改为列级合并
+#            （新数据非 NaN 优先，可修复中间缺列）；新增 INDEX_CODES 收敛两处重复定义
+#         ② 启动校验交易日历可用，失败 fail-loud（拒绝 trade_days_between 返 0 致
+#            full 假成功 / prev_trading_day 为 None 崩溃）；INDEX_CODES 参数化：
+#            CLI 新增 --codes 逗号分隔清单；按 code 主线程统一判定一次，广播四源；
+#            sina/tx 指数请求复用共享 Session 连接池（full 模式短连接 -> keep-alive 复用）
+#         ③ 写盘独占对齐 K 线 _Cursor 取号模型：共享游标一次取一号、一 code 一源独占
+#            写盘，消除广播模型四源同写 parquet 的 last-writer 竞争
+KLINE_VERSION = "1.3.1"
 
 
 def resolve_work_root(script_dir):
@@ -39,3 +49,7 @@ DATA_DIR = WORK_ROOT / "data"
 LOG_DIR = WORK_ROOT / "logs"
 CACHE_DIR = WORK_ROOT / "cache"
 INDEX_DIR = DATA_DIR / "index"
+
+# ---- 指数发号清单（收敛两处重复定义：原 run_index_collect.py / kline_sina_client.py，
+#      统一口径：上证/中证 + 深证代表指数；元组保序，消费端按此顺序发号） ----
+INDEX_CODES = ("000001", "000016", "000300", "000905", "000852")

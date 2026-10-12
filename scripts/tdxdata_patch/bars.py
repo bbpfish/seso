@@ -6,8 +6,10 @@
 解码逻辑参考 pytdx (MIT) rainx/pytdx — get_datetime/get_price/差分价格；请求构造 tdxdata 独立实现。
 
 category: 0=5min 1=15min 2=30min 3=60min 4=日线(后复权) 5=? 6=周 7=月 8=1min 9=日线 10=季 11=年
+
+marker: SESO_TDXDATA_PATCH_20261012（ensure_tdxdata_patch 自愈识别标记）
 """
-import struct
+import os, struct
 
 def build_bars_req(category: int, market: int, code: str, start: int, count: int) -> bytes:
     values = (0x10c, 0x01007b18, 0x1c, 0x1c, 0x052d, market, code.encode(), category, 1, start, count, 0, 0, 0)
@@ -22,7 +24,18 @@ def parse_bars_response(body: bytes, category: int, is_index: bool = False):
     普通股票响应无此字段，必须保持 False（不跳过），否则逐行错位。
     """
     from tdxdata.commands.quotes import get_price
+    if len(body) < 2:
+        raise ValueError("bars body 过短，无法读取 ret_count")
     (ret_count,) = struct.unpack("<H", body[0:2])
+    if ret_count == 0:
+        return []
+    # 长度下限：日期4B + 4×差分价格(每价≥1B) + vol/amount 8B（指数另加尾随4B）；
+    # 低于下限必为截断/协议错位，fail-loud 而非静默错位（审核报告 Q2 修复）
+    _min_row = 20 if is_index else 16
+    if len(body) < 2 + ret_count * _min_row:
+        raise ValueError(
+            f"bars body 长度不足：声明 {ret_count} 行，实际 {len(body)}B，"
+            f"低于下限 {2 + ret_count * _min_row}B（数据被截断或协议错位）")
     pos = 2
     out = []
     pre = 0
@@ -62,7 +75,7 @@ def parse_bars_response(body: bytes, category: int, is_index: bool = False):
 
 if __name__ == '__main__':
     import socket, time
-    HOST = '101.35.121.35'
+    HOST = os.environ.get("TDX_HOST", "101.35.121.35")
     C02 = bytes.fromhex("0c0218940001030003000d0001")
     C03 = bytes.fromhex("0c031899000120002000db0f7464786c6576656c000000295cf740110000000000000000000000000005")
     s = socket.socket(); s.settimeout(3)

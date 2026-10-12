@@ -361,6 +361,8 @@ def fetch_index_daily(code: str, start_date: str = "", end_date: str = ""):
     """
     import akshare as ak
     from stock_code_utils import get_index_symbol
+    from kline_sina_client import ensure_index_session_pool  # v1.3.1：共享会话池（幂等）
+    ensure_index_session_pool()
 
     try:
         symbol = get_index_symbol(code)
@@ -394,43 +396,82 @@ def fetch_index_daily(code: str, start_date: str = "", end_date: str = ""):
         return None
 
 
-def update_index(code, start_date: str = "", end_date: str = ""):
-    """腾讯源指数落盘（独立流程）：拉取指数日K，增量合并写 INDEX_DIR/{code}.parquet。
-
-    落盘列为统一指数契约 INDEX_COLS（含 volume 全 NaN），兼容下游 date/close 读取。
-    start_date/end_date 为空时接口自行全区间；已有本地文件则只增量合并新日期。
-    """
-    from stock_code_utils import get_index_symbol
-
-    INDEX_DIR.mkdir(parents=True, exist_ok=True)
-    fp = INDEX_DIR / f"{code}.parquet"
-    existing_end = None
-    if fp.exists():
-        try:
-            df = pd.read_parquet(fp, columns=['date'])
-            existing_end = pd.to_datetime(df['date']).max()
-        except Exception:
-            pass
+def _window_start(end_date, count):
+    """以 end_date 为终点向前 count 个交易日（对齐 K 线 _fetch_by_days 窗口语义）。
+    交易日历不可用时降级 count*2+10 自然日缓冲（覆盖周末+最长法定长假）。
+    返回 YYYY-MM-DD；计算失败返回空串（接口自行全区间）。"""
     try:
-        if get_index_symbol(code) is None:
-            logger.warning("Index %s: 非指数代码段（000/399），跳过落盘", code)
-            return False
-        df = fetch_index_daily(code, start_date=start_date, end_date=end_date)
-        if df is None or df.empty:
-            logger.warning("Index %s: no data", code)
-            return False
-        if existing_end:
-            new_part = df[df['date'] > existing_end]
-            if new_part.empty:
-                return True
-            old_df = pd.read_parquet(fp)
-            df = pd.concat([old_df, new_part], ignore_index=True)
-            df.drop_duplicates(subset=['date'], keep='last', inplace=True)
-            df.sort_values('date', inplace=True)
+        from trade_calendar import load_trading_calendar
+        _end = (pd.Timestamp(end_date).normalize()
+                if end_date else pd.Timestamp(pd.Timestamp.now()).normalize())
+        _n = max(int(count), 1)
+        cal = load_trading_calendar()
+        if cal is not None and len(cal) > 0:
+            arr = cal[cal <= _end]
+            if len(arr) > 0:
+                start = arr[-_n] if len(arr) >= _n else arr[0]
+                return start.strftime("%Y-%m-%d")
+        start = _end - pd.Timedelta(days=_n * 2 + 10)
+        return start.strftime("%Y-%m-%d")
+    except Exception:
+        return ""
+
+
+def _merge_index_write(fp, code, df, overwrite):
+    """指数落盘统一合并（对齐 K 线 _merge_write）：overwrite=True 直接替换整文件；
+    False 列级合并（新数据非 NaN 优先，可修复中间缺列，非仅追加新日期）。"""
+    INDEX_DIR.mkdir(parents=True, exist_ok=True)
+    if overwrite or not fp.exists():
         _tmp = fp.with_suffix(".parquet.tmp")
         df.to_parquet(_tmp, index=False)
         atomic_replace(_tmp, fp)
         return True
+    try:
+        old = pd.read_parquet(fp)
+        if old.empty or "date" not in old.columns:
+            raise ValueError("bad existing")
+    except Exception as e:
+        logger.warning("Index %s 存量读取失败(%s)，直接替换", code, str(e)[:80])
+        _tmp = fp.with_suffix(".parquet.tmp")
+        df.to_parquet(_tmp, index=False)
+        atomic_replace(_tmp, fp)
+        return True
+    new = df.copy()
+    new["date"] = pd.to_datetime(new["date"])
+    old["date"] = pd.to_datetime(old["date"])
+    merged = (new.set_index("date").combine_first(old.set_index("date"))
+              .reset_index().drop_duplicates("date").sort_values("date"))
+    for _c in INDEX_COLS[1:]:
+        if _c in merged.columns:
+            merged[_c] = pd.to_numeric(merged[_c], errors="coerce")
+    _tmp = fp.with_suffix(".parquet.tmp")
+    merged.to_parquet(_tmp, index=False)
+    atomic_replace(_tmp, fp)
+    return True
+
+
+def update_index(code, count: int = 0, start_date: str = "", end_date: str = "", overwrite=False):
+    """腾讯源指数落盘（独立流程）：拉取指数日K，落盘 INDEX_DIR/{code}.parquet。
+
+    落盘列为统一指数契约 INDEX_COLS（含 volume 全 NaN），兼容下游 date/close 读取。
+    count>0 且 start_date 为空时按交易日历取 end 前 count 个交易日（增量场景编排层
+    恒传 1 只拉当日）；overwrite=True 直接替换，False 列级合并。
+    """
+    from stock_code_utils import get_index_symbol
+
+    fp = INDEX_DIR / f"{code}.parquet"
+    try:
+        if get_index_symbol(code) is None:
+            logger.warning("Index %s: 非指数代码段（000/399），跳过落盘", code)
+            return False
+        _s = start_date
+        if count > 0 and not _s:
+            _s = _window_start(end_date, count)
+        df = fetch_index_daily(code, start_date=_s, end_date=end_date)
+        if df is None or df.empty:
+            logger.warning("Index %s: no data", code)
+            return False
+        return _merge_index_write(fp, code, df, overwrite)
     except Exception as e:
         logger.error("Index %s failed: %s", code, str(e)[:60])
         return False

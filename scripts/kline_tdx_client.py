@@ -316,38 +316,53 @@ def fetch_index_daily(code: str, count: int = 15, client=None):
     return df[INDEX_COLS]
 
 
-def update_index(code, count: int = 600):
-    """TDX 源指数落盘（独立流程）：拉取指数日K，增量合并写 INDEX_DIR/{code}.parquet。
-
-    落盘列为统一指数契约 INDEX_COLS（volume 已 ×100 归股），兼容下游 date/close 读取。
-    count 取最近 count 个交易日（默认 600 覆盖日常增量）；已有本地文件则只增量合并新日期。
-    """
+def _merge_index_write(fp, code, df, overwrite):
+    """指数落盘统一合并（对齐 K 线 _merge_write）：overwrite=True 直接替换整文件；
+    False 列级合并（新数据非 NaN 优先，可修复中间缺列，非仅追加新日期）。"""
     INDEX_DIR.mkdir(parents=True, exist_ok=True)
-    fp = INDEX_DIR / f"{code}.parquet"
-    existing_end = None
-    if fp.exists():
-        try:
-            df = pd.read_parquet(fp, columns=['date'])
-            existing_end = pd.to_datetime(df['date']).max()
-        except Exception:
-            pass
-    try:
-        df = fetch_index_daily(code, count=count)
-        if df is None or df.empty:
-            logger.warning("[%s] TDX 指数 no data", code)
-            return False
-        if existing_end:
-            new_part = df[df['date'] > existing_end]
-            if new_part.empty:
-                return True
-            old_df = pd.read_parquet(fp)
-            df = pd.concat([old_df, new_part], ignore_index=True)
-            df.drop_duplicates(subset=['date'], keep='last', inplace=True)
-            df.sort_values('date', inplace=True)
+    if overwrite or not fp.exists():
         _tmp = fp.with_suffix(".parquet.tmp")
         df.to_parquet(_tmp, index=False)
         atomic_replace(_tmp, fp)
         return True
+    try:
+        old = pd.read_parquet(fp)
+        if old.empty or "date" not in old.columns:
+            raise ValueError("bad existing")
+    except Exception as e:
+        logger.warning("[%s] 存量读取失败(%s)，直接替换", code, str(e)[:80])
+        _tmp = fp.with_suffix(".parquet.tmp")
+        df.to_parquet(_tmp, index=False)
+        atomic_replace(_tmp, fp)
+        return True
+    new = df.copy()
+    new["date"] = pd.to_datetime(new["date"])
+    old["date"] = pd.to_datetime(old["date"])
+    merged = (new.set_index("date").combine_first(old.set_index("date"))
+              .reset_index().drop_duplicates("date").sort_values("date"))
+    for _c in INDEX_COLS[1:]:
+        if _c in merged.columns:
+            merged[_c] = pd.to_numeric(merged[_c], errors="coerce")
+    _tmp = fp.with_suffix(".parquet.tmp")
+    merged.to_parquet(_tmp, index=False)
+    atomic_replace(_tmp, fp)
+    return True
+
+
+def update_index(code, count: int = 600, client=None, overwrite=False):
+    """TDX 源指数落盘（独立流程）：拉取指数日K，落盘 INDEX_DIR/{code}.parquet。
+
+    落盘列为统一指数契约 INDEX_COLS（volume 已 ×100 归股），兼容下游 date/close 读取。
+    count 取最近 count 个交易日（增量场景编排层恒传 1 只拉当日）；
+    overwrite=True 直接替换，False 列级合并（新数据非 NaN 优先，对齐 K 线 _merge_write）。
+    """
+    fp = INDEX_DIR / f"{code}.parquet"
+    try:
+        df = fetch_index_daily(code, count=count, client=client)
+        if df is None or df.empty:
+            logger.warning("[%s] TDX 指数 no data", code)
+            return False
+        return _merge_index_write(fp, code, df, overwrite)
     except Exception as e:
         logger.error("[%s] TDX 指数 failed: %s", code, str(e)[:60])
         return False

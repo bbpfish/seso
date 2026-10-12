@@ -19,6 +19,7 @@ THS 真实可采集市场依据（thsdk 1.7.18 源码，source-driven）:
 对外三值 -> thsdk adjust 映射（ADJUST_MAP）也归本模块管理，供客户端引用。
 """
 import logging
+from pathlib import Path
 from typing import Optional
 
 from kline_env import DATA_DIR
@@ -247,10 +248,10 @@ def load_stock_basic_codes(start_date=None, end_date=None):
     """加载 basic 名单（start_date/end_date 仅留档）：优先读状态链基础缓存。
 
     缓存位置：K 线数据目录（kline_env.DATA_DIR，<work>/data）的父目录下的
-    stock_basic_cache.parquet；其次尝试数据目录自身。读取 code 列
-    （形如 sh.600594）返回原始 code 列表，由调用方剥离交易所前缀为 6 位。
-    缓存缺失/损坏时回退持盘代码扫描，仍为空则调用方按空名单处理
-    （冷启动需保证 basic 缓存存在）。"""
+    stock_basic_cache.parquet（生产即数据目录父级 stock_basic_cache.parquet）；
+    其次尝试数据目录自身。读取 code 列（形如 sh.600594）返回原始 code 列表，
+    由调用方剥离交易所前缀为 6 位。缓存缺失/损坏时回退持盘代码扫描，
+    仍为空则调用方按空名单处理（冷启动需保证 basic 缓存存在）。"""
     import pandas as pd
 
     base = _KLINE_DATA_DIR
