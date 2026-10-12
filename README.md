@@ -1,8 +1,8 @@
-# SESO — 数据采集模块（公共版）
+# SESO — 数据采集模块
 
-SESO（Self-Evolving Strategy Optimizer）是一套面向 A 股市场的量化策略自进化优化系统。本仓库公开其**数据采集模块**：状态快照链、K 线四源采集与指数采集，覆盖从交易日历判断、股票状态快照、K 线多源并发采集到指数日 K 落盘的全链路。
+SESO（Self-Evolving Strategy Optimizer）是一套面向 A 股市场的量化策略自进化优化系统。
 
-> 说明：仓库仅包含采集模块相关代码；策略、回测、实盘等模块不在本仓库公开范围内。生产环境的部署路径、凭据等敏感信息不入库。
+> 说明：当前仓库仅包含采集模块相关代码；策略、回测、实盘等模块后续逐一添加。
 
 ---
 
@@ -67,8 +67,8 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-- **私有依赖**：`thsdk`（同花顺 SDK，`from thsdk import THS`）不在 PyPI，需按同花顺官方渠道单独安装；THS 采集需提供 `ths_credentials.env`（账户凭据，不入库，已被 `.gitignore` 排除）。
-- **Tushare 备源**：`sources.py` 的 tushare 备源需配置 token（环境变量或本地配置，不入库）；未配置时自动跳过备源，不影响主源链路。
+- **私有依赖**：`thsdk`（同花顺 SDK，`from thsdk import THS`）不在 PyPI，需按同花顺官方渠道单独安装；THS 采集需提供 `ths_credentials.env`（账户凭据）。
+- **Tushare 备源**：`sources.py` 的 tushare 备源需配置 token ；未配置时自动跳过备源，不影响主源链路。
 
 ---
 
@@ -124,8 +124,8 @@ python scripts/collect_stock_status.py                   # 全量快照
 
 ### 5.2 环境变量与凭据
 
-- `ths_credentials.env`：同花顺账户凭据，已被 `.gitignore` 排除，严禁入库。
-- Tushare token：仅本地配置，不入库。
+- `ths_credentials.env`：同花顺账户凭据。
+- Tushare token。
 - 无其他外部配置依赖。
 
 ### 5.3 Git 与 CI
@@ -133,4 +133,4 @@ python scripts/collect_stock_status.py                   # 全量快照
 - 主分支 `main`；提交信息遵循 `P0-xx / P1-xx / chore` 等约定。
 - CI（GitHub Actions）：push 至 `main` 触发，对 `scripts/` 全部 Python 文件执行 `py_compile` 语法检查 + `pyflakes` 静态检查，并运行平台无关的单测子集（`tests/test_sources.py`、`tests/test_status_schema.py`、`tests/test_baostock_client.py`、`tests/test_stock_code_utils.py`）。
 
-*（内容由 AI 生成，仅供参考）*
+*（内容由 AI 辅助生成）*
