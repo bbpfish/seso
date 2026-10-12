@@ -1,0 +1,24 @@
+# SESO 采集模块依赖清单（公共版）
+# 覆盖范围：scripts/ 下全部采集脚本（状态快照链 + K线四源 + 指数采集 + 交易日历）
+# 版本策略：下限约束（>=），避免过度锁定；建议在虚拟环境中安装：
+#   python -m venv .venv && source .venv/bin/activate
+#   pip install -r requirements.txt
+#
+# 注意：
+# 1) thsdk 为同花顺私有 SDK（from thsdk import THS），不在 PyPI 发布，
+#    需按同花顺官方渠道单独安装，故未列入本文件可自动安装列表。
+# 2) 生产部署建议 Linux 环境；Windows 本地亦可运行（脚本内置 fcntl/msvcrt 兼容分支）。
+# 3) akshare 接口随版本变化频繁，如遇接口改名/缺失，请升级 akshare 后重试。
+
+akshare>=1.10.0        # 行情数据源（kline_sina / kline_tx / 指数全量回源 / 备源快照）
+baostock>=0.8.9        # 状态快照主源（collect_stock_status / baostock_client）
+exchange_calendars>=4.13.0  # 交易日历（trade_calendar.py，XSHG 日历判定 A 股交易日）
+numpy>=1.24.0          # 数值计算（K线客户端）
+pandas>=2.0.0          # 数据处理（read_parquet / to_parquet 等）
+pyarrow>=12.0.0        # parquet 读写后端（status_schema / run_kline_multi）
+requests>=2.28.0       # HTTP 数据拉取（kline_sina / kline_tx / run_kline_multi）
+tdxdata==0.1.1         # TDX 通达信新协议日K备源（kline_tdx / 指数增量）
+
+# ---- 可选依赖 ----
+# tushare>=1.2.0       # 状态快照备源（sources.tushare_snapshot；未配置 token 时自动跳过）
+# thsdk                # 同花顺私有 SDK：from thsdk import THS（kline_ths / run_index_collect 使用）

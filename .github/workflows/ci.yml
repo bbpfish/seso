@@ -24,19 +24,17 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --quiet pandas numpy pyarrow baostock exchange-calendars pytest pyflakes
+          pip install --quiet pandas numpy pyarrow baostock exchange-calendars akshare tdxdata pytest pyflakes
 
       - name: Syntax check (py_compile)
         run: |
-          python -m py_compile scripts/baostock_client.py scripts/sources.py \
-            scripts/status_schema.py scripts/collect_stock_status.py scripts/trade_calendar.py
+          python -m py_compile scripts/*.py scripts/tdxdata_patch/*.py
 
       - name: Static lint (pyflakes)
         run: |
-          python -m pyflakes scripts/baostock_client.py scripts/sources.py \
-            scripts/status_schema.py scripts/collect_stock_status.py scripts/trade_calendar.py
+          python -m pyflakes scripts/*.py scripts/tdxdata_patch/*.py
 
       - name: Unit tests (platform-independent subset)
         run: |
-          python -m pytest tests/test_sources.py tests/test_status_schema.py tests/test_baostock_client.py -q
+          python -m pytest tests/test_sources.py tests/test_status_schema.py tests/test_baostock_client.py tests/test_stock_code_utils.py -q
 

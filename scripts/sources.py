@@ -2,8 +2,6 @@
 """
 sources.py — 备源快照与北交所补充（状态采集专用）
 
-版本随 status_schema.SCHEMA_VERSION 单点维护，本文件不重复定义版本号。
-
 职责：
 - Tushare 备源快照（stock_basic 在市名单，覆盖 baostock 故障）
 - akshare 北交所列表（覆盖 baostock 不覆盖 bj 的短板）
@@ -16,7 +14,7 @@ import os
 
 from pathlib import Path
 
-log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 __all__ = ["tushare_snapshot", "fetch_bj_universe"]
 
@@ -58,7 +56,7 @@ def tushare_snapshot(day, ash_pat, asz_pat):
     if not token and TUSHARE_TOKEN_FILE.exists():
         token = TUSHARE_TOKEN_FILE.read_text(encoding="utf-8-sig").strip()
     if not token:
-        log.warning("[tushare] 无 TUSHARE_TOKEN（环境变量或 %s 缺失）", TUSHARE_TOKEN_FILE)
+        logger.warning("[tushare] 无 TUSHARE_TOKEN（环境变量或 %s 缺失）", TUSHARE_TOKEN_FILE)
         return {}, {}, {}
     try:
         import tushare as ts
@@ -66,16 +64,16 @@ def tushare_snapshot(day, ash_pat, asz_pat):
         df = pro.stock_basic(exchange="", list_status="L",
                              fields="ts_code,symbol,name,market,list_date")
     except Exception as e:
-        log.error("[tushare] stock_basic FAIL %s（备源返回空三元组，交由阈值闸门兜底）", e)
+        logger.error("[tushare] stock_basic FAIL %s（备源返回空三元组，交由阈值闸门兜底）", e)
         return {}, {}, {}
     if df is None or df.empty:
-        log.warning("[tushare] %s stock_basic 返回空（备源返回空三元组）", day)
+        logger.warning("[tushare] %s stock_basic 返回空（备源返回空三元组）", day)
         return {}, {}, {}
     # 列名兼容：symbol / ts_code 统一归一为 code6（去交易所后缀）
     df.columns = [str(c).lower() for c in df.columns]
     code_col = "symbol" if "symbol" in df.columns else "ts_code"
     if code_col not in df.columns:
-        log.error("[tushare] 返回列 %s 无 symbol/ts_code，放弃本源", list(df.columns))
+        logger.error("[tushare] 返回列 %s 无 symbol/ts_code，放弃本源", list(df.columns))
         return {}, {}, {}
     df["code6"] = df[code_col].astype(str).str.split(".").str[0]
     if "ts_code" not in df.columns:
@@ -103,7 +101,7 @@ def tushare_snapshot(day, ash_pat, asz_pat):
             snap[code] = ("1", nm)
             extra[code] = {"code": code, "code_name": nm, "ipoDate": ld,
                            "outDate": "", "status": "1"}
-    log.info("[tushare] %s 备源 snap=%d bj=%d", day, len(snap), len(bj_u))
+    logger.info("[tushare] %s 备源 snap=%d bj=%d", day, len(snap), len(bj_u))
     return snap, bj_u, extra
 
 
@@ -115,7 +113,7 @@ def fetch_bj_universe():
         df = ak.stock_info_bj_name_code()
         missing = [c for c in _BJ_REQUIRED_COLS if c not in df.columns]
         if missing:
-            log.error("[bj] ak 返回缺必需列 %s（akshare 接口可能变更），北交所补充缺失，继续",
+            logger.error("[bj] ak 返回缺必需列 %s（akshare 接口可能变更），北交所补充缺失，继续",
                       missing)
             return {}
         out = {}
@@ -126,5 +124,5 @@ def fetch_bj_universe():
             out[code] = {"name": nm, "list_date": ld}
         return out
     except Exception as e:
-        log.warning("[bj] ak fetch FAIL %s（北交所补充缺失，继续）", e)
+        logger.warning("[bj] ak fetch FAIL %s（北交所补充缺失，继续）", e)
         return {}

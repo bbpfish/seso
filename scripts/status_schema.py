@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """status_schema.py — 状态判定、schema 定义与落盘工具（状态采集专用）
 
-版本唯一事实源：SCHEMA_VERSION（其余文件 docstring 引用本常量，不在各自文件内维护版本号）。
 依赖策略：pyarrow 为 HIST_SCHEMA 常量所需，顶层导入；pandas 统一函数内延迟导入，
 避免轻量模块 import 本文件时付出不必要的加载成本。
 
@@ -13,7 +12,6 @@
 - 落盘前 normal 阈值闸门（防名单源 fail-open 清空 universe）
 
 """
-import glob
 import logging
 import re
 from datetime import datetime
@@ -24,7 +22,6 @@ import pyarrow as pa
 log = logging.getLogger(__name__)
 
 __all__ = [
-    "SCHEMA_VERSION",
     "ASH_PAT", "ASZ_PAT",
     "COLS", "HIST_SCHEMA", "NEW_DAYS", "MIN_NORMAL_FOR_WRITE",
     "st_level_of", "is_new_at", "build_day_rows", "bj_kline_dates",
@@ -32,9 +29,6 @@ __all__ = [
     "year_parts", "append_partitioned",
     "load_basic_cache", "save_basic_cache", "assert_normal_threshold",
 ]
-
-# 版本号单点维护：其余模块 docstring 引用本常量，禁止在各文件重复定义
-SCHEMA_VERSION = "1.02"
 
 # 沪深A股代码模式（排除指数/基金/B股）；北交所 bj 前缀由 akshare 备源补充。
 # 单一事实源：baostock_client / collect_stock_status / sources 一律从这里引用
@@ -154,13 +148,13 @@ def bj_kline_dates(kline_dir):
     - 按 (文件 mtime) 缓存，未变更文件免重复全量读。
     """
     out = {}
-    for f in glob.glob(str(Path(kline_dir) / "*.parquet")):
-        code = Path(f).stem
+    for f in Path(kline_dir).glob("*.parquet"):
+        code = f.stem
         # 4/8 覆盖旧段(43/83/87)，9 覆盖 2024 年启用的新段 920；
         # sh.900xxx B股K线即使混入也会被 _day_rows_bj 的 bj_universe 门禁挡住
         if not (code.isdigit() and code.startswith(("4", "8", "9")) and len(code) == 6):
             continue
-        mtime = Path(f).stat().st_mtime
+        mtime = f.stat().st_mtime
         cached = _BJ_KLINE_CACHE.get(code)
         if cached and cached[0] == mtime:
             out[code] = cached[1]

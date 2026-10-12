@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 """baostock_client.py — baostock 连接管理与查询封装（状态采集专用）
 
-版本随 status_schema.SCHEMA_VERSION 单点维护，本文件不重复定义版本号。
-
 - 连接状态机（login/logout 全局标记）
 - 断连异常识别与自动重连（重试 + 退避，_with_retry 通用骨架）
 - 逐日全市场快照 / 单只 basic 查询（限流保护）

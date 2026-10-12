@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""collect_stock_status.py — v5：状态采集唯一实现（baostock 主源 + Tushare 备源）
+"""collect_stock_status.py ：状态采集唯一实现（baostock 主源 + Tushare 备源）
 
-版本唯一事实源：status_schema.SCHEMA_VERSION，本文件不重复定义版本号。
+版本号运行期 import 自 kline_env.KLINE_VERSION（--version / 启动日志对外显示，本文件不重复定义）。
 
 用法：
   python collect_stock_status.py                        # 每日增量（默认）
@@ -31,17 +31,16 @@ import sys
 import time
 from pathlib import Path
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(SCRIPT_DIR))
-WORK_DIR = SCRIPT_DIR.parent
-DATA_DIR = WORK_DIR / "data"
+from kline_env import DATA_DIR, KLINE_VERSION, LOG_DIR, SCRIPT_DIR
+
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+# 目录统一定义在 kline_env（SCRIPT_DIR/WORK_ROOT/DATA_DIR/LOG_DIR），此处直接引用。
 KLINE_DIR = DATA_DIR / "history_kline"
 import trade_calendar  # noqa: E402
 import baostock_client  # noqa: E402
 import status_schema  # noqa: E402
 import sources  # noqa: E402
-
-LOG_DIR = WORK_DIR / "logs"
 
 SNAP_DIR = DATA_DIR / "status_snapshots"
 BASIC_CACHE = DATA_DIR / "stock_basic_cache.parquet"
@@ -537,7 +536,9 @@ def _run(args):
 
 
 def main():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(description=f"状态采集（快照/主表，version={KLINE_VERSION}）")
+    ap.add_argument("--version", action="version", version=f"%(prog)s {KLINE_VERSION}",
+                    help="显示版本号并退出")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--incremental", action="store_true", help="每日增量（最新交易日；默认即增量）")
     mode.add_argument("--full", action="store_true", help="全量重建（断点续跑）")
@@ -553,6 +554,7 @@ def main():
     args = ap.parse_args()
 
     _setup_logging()
+    log.info("[main] collect_stock_status start version=%s", KLINE_VERSION)
 
     lock = _acquire_lock(DATA_DIR / "collect_stock_status.lock")
     if lock is None:
