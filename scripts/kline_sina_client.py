@@ -271,7 +271,6 @@ def fetch_index_daily(code: str, start_date: str = "", end_date: str = ""):
             logger.warning("Index %s: no data", code)
             return None
         df = df.rename(columns={})
-        _cols = {c: c for c in ['date', 'open', 'high', 'low', 'close', 'volume']}
         for _c in ['date', 'open', 'high', 'low', 'close', 'volume']:
             if _c not in df.columns:
                 logger.warning("Index %s: 新浪返回缺列 %s，已补 NaN", code, _c)

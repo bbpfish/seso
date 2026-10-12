@@ -23,7 +23,6 @@ LOG_DIR / CACHE_DIR），本文件直接引用，不再重复推导；子进程�
 获取一致目录，不再经环境变量注入。
 """
 import argparse
-import datetime
 import logging
 import logging.handlers
 import os
@@ -31,7 +30,7 @@ import subprocess
 import sys
 import time
 
-from kline_env import (CACHE_DIR, DATA_DIR, KLINE_VERSION, LOG_DIR,  # noqa: E402
+from kline_env import (KLINE_VERSION, LOG_DIR,  # noqa: E402
                        SCRIPTS_DIR)
 
 # load THS credentials (thsdk reads THS_USERNAME/THS_PASSWORD; originally injected by run_kline_ths.sh, now self-contained)
@@ -100,7 +99,6 @@ def main():
                     help="透传给 run_kline_multi 的 --use-list")
     args = ap.parse_args()
 
-    now = datetime.datetime.now()
     logger = setup_logger()
     logger.info("=== daily collect start version=%s mode=%s ===",
                 KLINE_VERSION, "incremental" if args.incremental else "full")

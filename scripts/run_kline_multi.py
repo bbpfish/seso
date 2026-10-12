@@ -58,8 +58,8 @@ if _HERE not in sys.path:
     sys.path.append(_HERE)
 from io_atomic import atomic_replace  # noqa: E402
 from trade_calendar import trade_days_between, prev_trading_day, cn_today  # noqa: E402
-from kline_env import (CACHE_DIR, DATA_DIR, KLINE_VERSION, LOG_DIR,  # noqa: E402
-                       SCRIPTS_DIR)
+from kline_env import (DATA_DIR, KLINE_VERSION, LOG_DIR,  # noqa: E402
+                       )
 from kline_ths_client import THSConnectionError  # noqa: E402
 from kline_tdx_client import TDXConnectionError  # noqa: E402
 
@@ -913,7 +913,7 @@ def _drain_pending(source, stage, pending, fetch_std, fetch_adj, adjust_seq,
             try:
                 r, detail = _process_item(source, stage, code, plan, fetch_std, fetch_adj,
                                           adjust_seq, mode, overwrite, index=index)
-            except (THSConnectionError, TDXConnectionError) as e:
+            except (THSConnectionError, TDXConnectionError):
                 conn_streak += 1
                 if conn_streak >= _CONN_RECONNECT_STREAK:
                     ctx = _rebuild_source(source, holder) if holder is not None else None
@@ -967,7 +967,7 @@ def _drain_pending(source, stage, pending, fetch_std, fetch_adj, adjust_seq,
         try:
             r, detail = _process_item(source, stage, code, plan, fetch_std, fetch_adj,
                                       adjust_seq, mode, overwrite, index=index)
-        except (THSConnectionError, TDXConnectionError) as e:
+        except (THSConnectionError, TDXConnectionError):
             conn_streak += 1
             if conn_streak >= _CONN_RECONNECT_STREAK:
                 ctx = _rebuild_source(source, holder) if holder is not None else None
@@ -1061,7 +1061,7 @@ def _run_chain(source, chain, holder, mode, overwrite, start_date, end_date,
                         r, detail = _process_item(source, stage, code, plan, fetch_std,
                                                   fetch_adj, adjust_seq, mode, overwrite, touched,
                                                   index=index)
-                    except (THSConnectionError, TDXConnectionError) as e:
+                    except (THSConnectionError, TDXConnectionError):
                         conn_streak += 1
                         if conn_streak >= _CONN_RECONNECT_STREAK:
                             ctx = _rebuild_source(source, holder) if holder is not None else None

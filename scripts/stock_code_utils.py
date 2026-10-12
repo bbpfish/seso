@@ -19,7 +19,6 @@ THS 真实可采集市场依据（thsdk 1.7.18 源码，source-driven）:
 对外三值 -> thsdk adjust 映射（ADJUST_MAP）也归本模块管理，供客户端引用。
 """
 import logging
-from pathlib import Path
 from typing import Optional
 
 from kline_env import DATA_DIR
